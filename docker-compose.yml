@@ -1,0 +1,27 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: boat-postgres
+    ports:
+      # [호스트:컨테이너]
+      # 내 컴퓨터의 5433 포트로 접속 -> 컨테이너의 5432(표준)로 연결
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: boat_user
+      POSTGRES_PASSWORD: boat_password
+      POSTGRES_DB: boat_db
+    # volumes 섹션 삭제됨 (컨테이너 재시작 시 데이터 초기화)
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    container_name: boat-redis
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    ports:
+      # [호스트:컨테이너]
+      # 내 컴퓨터의 6380 포트로 접속 -> 컨테이너의 6379(표준)로 연결
+      - "6380:6379"
+    volumes:
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    restart: always
