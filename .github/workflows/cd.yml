@@ -25,36 +25,50 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
 
-      - name: Grant gradle permission
-        run: chmod +x ./gradlew
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
 
       - name: Build jar
-        run: ./gradlew --no-daemon clean bootJar -x test
+        run: gradle --no-daemon clean bootJar -x test
 
   docker:
     needs: build
-    if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' && secrets.ECR_REPOSITORY_BACKEND != '' }}
     runs-on: ubuntu-latest
     outputs:
       image_uri: ${{ steps.meta.outputs.image_uri }}
 
     steps:
+      - name: Check required secrets
+        id: check
+        run: |
+          if [ -z "${{ secrets.AWS_ROLE_TO_ASSUME }}" ] || [ -z "${{ secrets.ECR_REPOSITORY_BACKEND }}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping docker job: missing AWS_ROLE_TO_ASSUME or ECR_REPOSITORY_BACKEND"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout
+        if: ${{ steps.check.outputs.enabled == 'true' }}
         uses: actions/checkout@v4
 
       - name: Configure AWS credentials (OIDC)
+        if: ${{ steps.check.outputs.enabled == 'true' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
+        if: ${{ steps.check.outputs.enabled == 'true' }}
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and push image
+        if: ${{ steps.check.outputs.enabled == 'true' }}
         id: meta
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
@@ -70,11 +84,22 @@ jobs:
 
   deploy-ec2:
     needs: docker
-    if: ${{ needs.docker.result == 'success' && secrets.EC2_HOST != '' && secrets.EC2_USER != '' && secrets.EC2_SSH_KEY != '' }}
+    if: ${{ needs.docker.outputs.image_uri != '' }}
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check required EC2 secrets
+        id: check
+        run: |
+          if [ -z "${{ secrets.EC2_HOST }}" ] || [ -z "${{ secrets.EC2_USER }}" ] || [ -z "${{ secrets.EC2_SSH_KEY }}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping EC2 deploy: missing EC2_HOST/EC2_USER/EC2_SSH_KEY"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy on EC2 via SSH
+        if: ${{ steps.check.outputs.enabled == 'true' }}
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
