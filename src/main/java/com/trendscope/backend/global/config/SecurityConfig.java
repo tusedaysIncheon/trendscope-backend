@@ -147,9 +147,14 @@ public class SecurityConfig {
                 http
                                 .authorizeHttpRequests(auth -> auth
                                                 .requestMatchers(
+                                                                "/healthz",
+                                                                "/trendscope/healthz",
                                                                 "/swagger-ui.html",
                                                                 "/swagger-ui/**",
-                                                                "/v3/api-docs/**")
+                                                                "/v3/api-docs/**",
+                                                                "/trendscope/swagger-ui.html",
+                                                                "/trendscope/swagger-ui/**",
+                                                                "/trendscope/v3/api-docs/**")
                                                 .permitAll()
                                                 .requestMatchers("/jwt/refresh", "/jwt/exchange").permitAll()
                                                 .requestMatchers(HttpMethod.POST, "/v*/auth/email-otp/**").permitAll()
