@@ -6,6 +6,7 @@ import com.trendscope.backend.domain.user.dto.AuthLoginResponseDTO;
 import com.trendscope.backend.domain.user.dto.UserResponseDTO;
 import com.trendscope.backend.domain.user.entity.UserEntity;
 import com.trendscope.backend.domain.user.entity.enums.SocialProviderType;
+import com.trendscope.backend.domain.user.entity.enums.TicketType;
 import com.trendscope.backend.domain.user.entity.enums.UserRoleType;
 import com.trendscope.backend.domain.user.repository.UserRepository;
 import com.trendscope.backend.global.jwt.service.JwtService;
@@ -51,8 +52,26 @@ public class EmailOtpAuthService {
     @Value("${JWT_REFRESH_EXPIRATION_MS}")
     private long refreshTokenExpirationMs;
 
+    @Value("${app.auth.email-otp.review.enabled:false}")
+    private boolean reviewLoginEnabled;
+
+    @Value("${app.auth.email-otp.review.email:}")
+    private String reviewLoginEmail;
+
+    @Value("${app.auth.email-otp.review.password:}")
+    private String reviewLoginPassword;
+
+    @Value("${app.auth.email-otp.review.quick-ticket-balance:20}")
+    private int reviewQuickTicketBalance;
+
+    @Value("${app.auth.email-otp.review.premium-ticket-balance:20}")
+    private int reviewPremiumTicketBalance;
+
     public void requestOtp(EmailOtpRequestDTO dto) {
         String normalizedEmail = normalizeEmail(dto.getEmail());
+        if (isReviewBypassEmail(normalizedEmail)) {
+            return;
+        }
         String cooldownKey = otpCooldownKey(normalizedEmail);
         if (redisService.getStringValue(cooldownKey) != null) {
             throw new IllegalArgumentException("인증 코드는 잠시 후 다시 요청해주세요.");
@@ -71,6 +90,15 @@ public class EmailOtpAuthService {
     @Transactional
     public AuthLoginResponseDTO verifyOtp(EmailOtpVerifyRequestDTO dto, HttpServletResponse response) {
         String normalizedEmail = normalizeEmail(dto.getEmail());
+        if (isReviewBypassEmail(normalizedEmail)) {
+            if (!isReviewBypassLogin(normalizedEmail, dto.getCode())) {
+                throw new IllegalArgumentException("리뷰 계정 비밀번호가 올바르지 않습니다.");
+            }
+            UserEntity reviewUser = findOrCreateOtpUser(normalizedEmail);
+            ensureReviewTicketBalances(reviewUser);
+            return issueTokens(reviewUser, normalizeDeviceId(dto.getDeviceId()), response);
+        }
+
         String savedHash = redisService.getStringValue(otpKey(normalizedEmail));
         if (savedHash == null) {
             throw new IllegalArgumentException("인증 코드가 만료되었거나 존재하지 않습니다.");
@@ -92,11 +120,13 @@ public class EmailOtpAuthService {
         redisService.deleteKey(attemptKey);
 
         UserEntity user = findOrCreateOtpUser(normalizedEmail);
+        return issueTokens(user, normalizeDeviceId(dto.getDeviceId()), response);
+    }
 
+    private AuthLoginResponseDTO issueTokens(UserEntity user, String deviceId, HttpServletResponse response) {
         String username = user.getUsername();
         String accessToken = jwtService.createAccessToken(username);
         String refreshToken = jwtService.createRefreshToken(username);
-        String deviceId = normalizeDeviceId(dto.getDeviceId());
         jwtService.addRefresh(username, refreshToken, deviceId);
         setRefreshCookie(response, refreshToken);
 
@@ -107,6 +137,41 @@ public class EmailOtpAuthService {
                 user.getTicketBalance()
         );
         return new AuthLoginResponseDTO(accessToken, userResponse);
+    }
+
+    private void ensureReviewTicketBalances(UserEntity user) {
+        int targetQuick = Math.max(reviewQuickTicketBalance, 0);
+        int targetPremium = Math.max(reviewPremiumTicketBalance, 0);
+
+        int quickGap = targetQuick - user.getQuickTicketBalance();
+        if (quickGap > 0) {
+            user.changeTicketBalance(TicketType.QUICK, quickGap);
+        }
+
+        int premiumGap = targetPremium - user.getPremiumTicketBalance();
+        if (premiumGap > 0) {
+            user.changeTicketBalance(TicketType.PREMIUM, premiumGap);
+        }
+    }
+
+    private boolean isReviewBypassEmail(String normalizedEmail) {
+        if (!reviewLoginEnabled) {
+            return false;
+        }
+        if (!hasText(reviewLoginEmail)) {
+            return false;
+        }
+        return normalizeEmail(reviewLoginEmail).equals(normalizedEmail);
+    }
+
+    private boolean isReviewBypassLogin(String normalizedEmail, String code) {
+        if (!isReviewBypassEmail(normalizedEmail)) {
+            return false;
+        }
+        if (!hasText(reviewLoginPassword)) {
+            return false;
+        }
+        return reviewLoginPassword.trim().equals(code);
     }
 
     private UserEntity findOrCreateOtpUser(String email) {
@@ -144,6 +209,10 @@ public class EmailOtpAuthService {
             return "unknown-device-id";
         }
         return deviceId;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     private String generateOtpUsername() {

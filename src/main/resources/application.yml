@@ -131,6 +131,12 @@ app:
       cooldown-seconds: ${EMAIL_OTP_COOLDOWN_SECONDS:60}
       max-attempts: ${EMAIL_OTP_MAX_ATTEMPTS:5}
       pepper: ${EMAIL_OTP_PEPPER:change-me-in-production}
+      review:
+        enabled: ${EMAIL_OTP_REVIEW_LOGIN_ENABLED:false}
+        email: ${EMAIL_OTP_REVIEW_LOGIN_EMAIL:}
+        password: ${EMAIL_OTP_REVIEW_LOGIN_PASSWORD:}
+        quick-ticket-balance: ${EMAIL_OTP_REVIEW_LOGIN_QUICK_TICKET_BALANCE:20}
+        premium-ticket-balance: ${EMAIL_OTP_REVIEW_LOGIN_PREMIUM_TICKET_BALANCE:20}
       ses:
         access-key: ${SES_ACCESS_KEY:}
         secret-key: ${SES_SECRET_KEY:}
