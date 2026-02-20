@@ -123,6 +123,6 @@ jobs:
             docker run -d \
               --name trendscope-backend \
               --restart unless-stopped \
-              -p 8080:8080 \
+              -p 127.0.0.1:8080:8080 \
               --env-file /opt/trendscope/backend/.env \
               "$IMAGE_URI"
