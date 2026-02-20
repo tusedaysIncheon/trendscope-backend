@@ -22,8 +22,11 @@ public class AnalyzeRetentionScheduler {
     private final AnalyzeJobRepository analyzeJobRepository;
     private final S3Util s3Util;
 
-    @Value("${app.analyze.retention-days:30}")
-    private long retentionDays;
+    @Value("${app.analyze.photo-retention-days:1}")
+    private long photoRetentionDays;
+
+    @Value("${app.analyze.model-retention-days:365}")
+    private long modelRetentionDays;
 
     @Value("${app.analyze.retention-batch-size:200}")
     private int retentionBatchSize;
@@ -32,12 +35,62 @@ public class AnalyzeRetentionScheduler {
     @Transactional
     public void purgeExpiredAnalyzeData() {
         int batchSize = Math.max(1, Math.min(retentionBatchSize, 500));
-        LocalDateTime cutoff = LocalDateTime.now().minusDays(Math.max(1, retentionDays));
+        long photoDays = Math.max(1, photoRetentionDays);
+        long modelDays = Math.max(photoDays, modelRetentionDays);
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime photoCutoff = now.minusDays(photoDays);
+        LocalDateTime modelCutoff = now.minusDays(modelDays);
+
+        long scrubbedPhotoRows = purgeExpiredInputPhotos(photoCutoff, modelCutoff, batchSize);
+        long deletedRows = purgeExpiredAnalyzeJobs(modelCutoff, batchSize);
+
+        if (scrubbedPhotoRows > 0 || deletedRows > 0) {
+            log.info(
+                    "Analyze retention purge complete. photoCutoff={} modelCutoff={} scrubbedPhotoRows={} deletedRows={}",
+                    photoCutoff,
+                    modelCutoff,
+                    scrubbedPhotoRows,
+                    deletedRows
+            );
+        }
+    }
+
+    private long purgeExpiredInputPhotos(LocalDateTime photoCutoff, LocalDateTime modelCutoff, int batchSize) {
+        long scrubbedRows = 0L;
+
+        while (true) {
+            List<AnalyzeJobEntity> targets = analyzeJobRepository
+                    .findPhotoPurgeTargets(photoCutoff, modelCutoff, PageRequest.of(0, batchSize))
+                    .getContent();
+            if (targets.isEmpty()) {
+                break;
+            }
+
+            for (AnalyzeJobEntity job : targets) {
+                safeDelete(job.getFrontImageKey());
+                safeDelete(job.getSideImageKey());
+                job.clearInputImageKeys();
+            }
+
+            analyzeJobRepository.saveAll(targets);
+            analyzeJobRepository.flush();
+            scrubbedRows += targets.size();
+
+            if (targets.size() < batchSize) {
+                break;
+            }
+        }
+
+        return scrubbedRows;
+    }
+
+    private long purgeExpiredAnalyzeJobs(LocalDateTime modelCutoff, int batchSize) {
         long deletedRows = 0L;
 
         while (true) {
             List<AnalyzeJobEntity> targets = analyzeJobRepository
-                    .findByCompletedAtBeforeOrderByCompletedAtAsc(cutoff, PageRequest.of(0, batchSize))
+                    .findByCompletedAtBeforeOrderByCompletedAtAsc(modelCutoff, PageRequest.of(0, batchSize))
                     .getContent();
             if (targets.isEmpty()) {
                 break;
@@ -50,16 +103,14 @@ public class AnalyzeRetentionScheduler {
             }
 
             analyzeJobRepository.deleteAllInBatch(targets);
+            analyzeJobRepository.flush();
             deletedRows += targets.size();
 
             if (targets.size() < batchSize) {
                 break;
             }
         }
-
-        if (deletedRows > 0) {
-            log.info("Analyze retention purge complete. cutoff={} deletedRows={}", cutoff, deletedRows);
-        }
+        return deletedRows;
     }
 
     private void safeDelete(String objectKey) {

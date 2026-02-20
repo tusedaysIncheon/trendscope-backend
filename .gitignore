@@ -39,6 +39,7 @@ out/
 ### Spring Boot ###
 application.properties
 application.yml
+!src/main/resources/application.yml
 *.log
 logs/
 log/

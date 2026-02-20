@@ -122,6 +122,12 @@ public class AnalyzeJobEntity {
         this.outputPose = outputPose;
     }
 
+    public void clearInputImageKeys() {
+        // front_image_key is NOT NULL in schema, so keep it as empty marker after purge.
+        this.frontImageKey = "";
+        this.sideImageKey = null;
+    }
+
     public void markQueued() {
         this.status = AnalyzeJobStatus.QUEUED;
         this.queuedAt = LocalDateTime.now();
