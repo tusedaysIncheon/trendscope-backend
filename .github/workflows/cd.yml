@@ -36,7 +36,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     outputs:
-      image_uri: ${{ steps.meta.outputs.image_uri }}
+      enabled: ${{ steps.check.outputs.enabled }}
 
     steps:
       - name: Check required secrets
@@ -67,7 +67,6 @@ jobs:
 
       - name: Build and push image
         if: ${{ steps.check.outputs.enabled == 'true' }}
-        id: meta
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
           REPOSITORY: ${{ secrets.ECR_REPOSITORY_BACKEND }}
@@ -78,11 +77,10 @@ jobs:
           docker build -t "$IMAGE_URI:$IMAGE_TAG" -t "$IMAGE_URI:latest" .
           docker push "$IMAGE_URI:$IMAGE_TAG"
           docker push "$IMAGE_URI:latest"
-          echo "image_uri=$IMAGE_URI:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
 
   deploy-ec2:
     needs: docker
-    if: ${{ needs.docker.outputs.image_uri != '' }}
+    if: ${{ needs.docker.outputs.enabled == 'true' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -106,13 +104,17 @@ jobs:
           envs: AWS_REGION
           script: |
             set -euo pipefail
-            IMAGE_URI='${{ needs.docker.outputs.image_uri }}'
-            REGISTRY="$(echo "$IMAGE_URI" | cut -d/ -f1)"
+            REPOSITORY='${{ secrets.ECR_REPOSITORY_BACKEND }}'
+            IMAGE_TAG='${{ github.sha }}'
 
             if ! command -v aws >/dev/null 2>&1; then
               echo "aws cli not found on EC2. Install AWS CLI first."
               exit 1
             fi
+
+            ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+            REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+            IMAGE_URI="${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}"
 
             aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "$REGISTRY"
             docker pull "$IMAGE_URI"
