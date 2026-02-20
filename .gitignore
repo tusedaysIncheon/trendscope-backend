@@ -44,6 +44,7 @@ application.yml
 logs/
 log/
 *.jar
+!gradle/wrapper/gradle-wrapper.jar
 *.war
 *.ear
 target/
