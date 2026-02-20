@@ -126,6 +126,8 @@ app:
       delivery-mode: ${EMAIL_OTP_DELIVERY_MODE:log}
       from: ${EMAIL_OTP_FROM:no-reply@trendscope.local}
       ttl-seconds: ${EMAIL_OTP_TTL_SECONDS:300}
+      brand-name: ${EMAIL_OTP_BRAND_NAME:TRENDSCOPE}
+      brand-logo-url: ${EMAIL_OTP_BRAND_LOGO_URL:}
       cooldown-seconds: ${EMAIL_OTP_COOLDOWN_SECONDS:60}
       max-attempts: ${EMAIL_OTP_MAX_ATTEMPTS:5}
       pepper: ${EMAIL_OTP_PEPPER:change-me-in-production}

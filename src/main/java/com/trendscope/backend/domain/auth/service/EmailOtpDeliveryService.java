@@ -22,6 +22,7 @@ import software.amazon.awssdk.services.ses.model.SendEmailRequest;
 import software.amazon.awssdk.services.ses.model.SendEmailResponse;
 
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -45,6 +46,18 @@ public class EmailOtpDeliveryService {
     @Value("${app.auth.email-otp.ses.region:ap-northeast-2}")
     private String sesRegion;
 
+    @Value("${app.auth.email-otp.ttl-seconds:300}")
+    private long otpTtlSeconds;
+
+    @Value("${app.auth.email-otp.brand-name:TrendScope}")
+    private String brandName;
+
+    @Value("${app.auth.email-otp.brand-logo-url:}")
+    private String brandLogoUrl;
+
+    @Value("${app.frontend-base-url:http://localhost:5173}")
+    private String frontendBaseUrl;
+
     private volatile SesClient sesClient;
 
     public void sendOtpCode(String email, String code) {
@@ -64,8 +77,8 @@ public class EmailOtpDeliveryService {
                     SimpleMailMessage message = new SimpleMailMessage();
                     message.setFrom(fromAddress);
                     message.setTo(email);
-                    message.setSubject("[TrendScope] 이메일 인증 코드");
-                    message.setText("인증 코드는 " + code + " 입니다. 5분 내에 입력해주세요.");
+                    message.setSubject(buildSubject());
+                    message.setText(buildTextBody(code));
                     mailSender.send(message);
                     return;
                 } catch (Exception e) {
@@ -86,11 +99,15 @@ public class EmailOtpDeliveryService {
                 .source(fromAddress)
                 .destination(Destination.builder().toAddresses(email).build())
                 .message(Message.builder()
-                        .subject(Content.builder().charset("UTF-8").data("[TrendScope] 이메일 인증 코드").build())
+                        .subject(Content.builder().charset("UTF-8").data(buildSubject()).build())
                         .body(Body.builder()
                                 .text(Content.builder()
                                         .charset("UTF-8")
-                                        .data("인증 코드는 " + code + " 입니다. 5분 내에 입력해주세요.")
+                                        .data(buildTextBody(code))
+                                        .build())
+                                .html(Content.builder()
+                                        .charset("UTF-8")
+                                        .data(buildHtmlBody(code))
                                         .build())
                                 .build())
                         .build())
@@ -126,6 +143,90 @@ public class EmailOtpDeliveryService {
             sesClient = builder.build();
             return sesClient;
         }
+    }
+
+    private String buildSubject() {
+        return "[" + brandName + "] 이메일 인증 코드";
+    }
+
+    private String buildTextBody(String code) {
+        long ttlMinutes = Math.max(1L, TimeUnit.SECONDS.toMinutes(Math.max(1L, otpTtlSeconds)));
+        return String.format(
+                "%s 이메일 인증 코드 안내\n\n인증 코드: %s\n유효 시간: %d분\n\n본인이 요청하지 않았다면 이 메일을 무시해주세요.",
+                brandName,
+                code,
+                ttlMinutes
+        );
+    }
+
+    private String buildHtmlBody(String code) {
+        long ttlMinutes = Math.max(1L, TimeUnit.SECONDS.toMinutes(Math.max(1L, otpTtlSeconds)));
+        String brandWordmark = brandName.trim().isEmpty()
+                ? "TRENDSCOPE"
+                : brandName.trim().toUpperCase(Locale.ROOT);
+        String logoUrl = buildBrandLogoUrl();
+        return """
+                <!doctype html>
+                <html lang="ko">
+                  <head>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1">
+                    <title>%s 이메일 인증 코드</title>
+                  </head>
+                  <body style="margin:0;padding:0;background:#f7faf9;font-family:'Inter','Noto Sans KR',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1f2937;">
+                    <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" style="padding:24px 12px;">
+                      <tr>
+                        <td align="center">
+                          <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;">
+                            <tr>
+                              <td style="padding:16px 24px;background:linear-gradient(135deg,#3c91e6,#2f7fd4);color:#ffffff;">
+                                <table role="presentation" width="100%%" cellspacing="0" cellpadding="0">
+                                  <tr>
+                                    <td style="vertical-align:middle;">
+                                      <img src="%s" alt="%s Logo" width="34" height="34" style="display:inline-block;width:34px;height:34px;vertical-align:middle;border-radius:6px;object-fit:contain;background:#ffffff;padding:3px;box-sizing:border-box;" />
+                                      <span style="display:inline-block;vertical-align:middle;margin-left:10px;font-size:17px;font-weight:900;letter-spacing:0.04em;line-height:1;">%s</span>
+                                    </td>
+                                  </tr>
+                                </table>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style="padding:24px;">
+                                <p style="margin:0 0 12px 0;font-size:15px;line-height:1.6;">
+                                  아래 인증 코드를 입력해 로그인을 완료해주세요.
+                                </p>
+                                <div style="margin:20px 0;padding:16px 20px;border:1px dashed #99f6e4;border-radius:10px;background:#f0fdfa;text-align:center;">
+                                  <span style="font-size:30px;letter-spacing:6px;font-weight:700;color:#0f766e;">%s</span>
+                                </div>
+                                <p style="margin:0 0 8px 0;font-size:14px;color:#374151;">
+                                  유효 시간: %d분
+                                </p>
+                                <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">
+                                  본인이 요청하지 않은 인증 메일이라면 이 메일을 무시해주세요.
+                                </p>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </body>
+                </html>
+                """.formatted(brandName, logoUrl, brandName, brandWordmark, code, ttlMinutes);
+    }
+
+    private String buildBrandLogoUrl() {
+        if (hasText(brandLogoUrl)) {
+            return brandLogoUrl.trim();
+        }
+        String base = (frontendBaseUrl == null ? "" : frontendBaseUrl.trim());
+        if (base.isEmpty()) {
+            return "";
+        }
+        if (base.endsWith("/")) {
+            return base + "logo1.png";
+        }
+        return base + "/logo1.png";
     }
 
     private boolean hasText(String value) {
