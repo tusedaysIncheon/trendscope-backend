@@ -74,6 +74,7 @@ class FashionRecommendationServiceTest {
                 .mode(AnalyzeMode.QUICK_1VIEW)
                 .status(AnalyzeJobStatus.COMPLETED)
                 .measurementModel("quick")
+                .gender("male")
                 .resultJson("""
                         {
                           "success": true,
@@ -95,7 +96,7 @@ class FashionRecommendationServiceTest {
         when(analyzeJobRepository.findByJobIdAndUserUsername(jobId, username)).thenReturn(Optional.of(job));
         when(historyRepository.findByAnalyzeJob_Id(job.getId())).thenReturn(Optional.empty());
         when(historyRepository.findTopByUser_IdOrderByUserSeqDesc(user.getId())).thenReturn(Optional.empty());
-        when(openAiFashionClient.recommend(any(JsonNode.class), anyString(), isNull(), isNull()))
+        when(openAiFashionClient.recommend(any(JsonNode.class), anyString(), anyString(), isNull(), isNull()))
                 .thenReturn(objectMapper.readTree("{\"version\":\"mvp.v1\"}"));
 
         FashionRecommendationResponseDTO response = service.recommend(username, dto);
@@ -105,9 +106,10 @@ class FashionRecommendationServiceTest {
         assertEquals("mvp.v1", response.recommendation().path("version").asText());
 
         ArgumentCaptor<JsonNode> captor = ArgumentCaptor.forClass(JsonNode.class);
-        verify(openAiFashionClient).recommend(captor.capture(), eq("quick"), isNull(), isNull());
+        verify(openAiFashionClient).recommend(captor.capture(), eq("quick"), eq("male"), isNull(), isNull());
         JsonNode input = captor.getValue();
         assertTrue(input.path("success").asBoolean());
+        assertEquals("male", input.path("gender").asText());
         assertTrue(input.path("lengths").isObject());
         assertTrue(input.path("circumferences").isMissingNode());
         assertTrue(input.path("body_shape").isMissingNode());
@@ -128,6 +130,7 @@ class FashionRecommendationServiceTest {
                 .mode(AnalyzeMode.STANDARD_2VIEW)
                 .status(AnalyzeJobStatus.COMPLETED)
                 .measurementModel("premium")
+                .gender("female")
                 .resultJson("""
                         {
                           "success": true,
@@ -158,15 +161,16 @@ class FashionRecommendationServiceTest {
         when(analyzeJobRepository.findByJobIdAndUserUsername(jobId, username)).thenReturn(Optional.of(job));
         when(historyRepository.findByAnalyzeJob_Id(job.getId())).thenReturn(Optional.empty());
         when(historyRepository.findTopByUser_IdOrderByUserSeqDesc(user.getId())).thenReturn(Optional.empty());
-        when(openAiFashionClient.recommend(any(JsonNode.class), anyString(), isNull(), isNull()))
+        when(openAiFashionClient.recommend(any(JsonNode.class), anyString(), anyString(), isNull(), isNull()))
                 .thenReturn(objectMapper.readTree("{\"version\":\"mvp.v1\"}"));
 
         service.recommend(username, dto);
 
         ArgumentCaptor<JsonNode> captor = ArgumentCaptor.forClass(JsonNode.class);
-        verify(openAiFashionClient).recommend(captor.capture(), eq("premium"), isNull(), isNull());
+        verify(openAiFashionClient).recommend(captor.capture(), eq("premium"), eq("female"), isNull(), isNull());
         JsonNode input = captor.getValue();
         assertTrue(input.path("success").asBoolean());
+        assertEquals("female", input.path("gender").asText());
         assertTrue(input.path("lengths").isObject());
         assertTrue(input.path("circumferences").isObject());
         assertEquals("pear", input.path("body_shape").asText());
@@ -189,6 +193,7 @@ class FashionRecommendationServiceTest {
                 .mode(AnalyzeMode.STANDARD_2VIEW)
                 .status(AnalyzeJobStatus.COMPLETED)
                 .measurementModel("premium")
+                .gender("female")
                 .resultJson("""
                         {
                           "success": true,
@@ -215,12 +220,18 @@ class FashionRecommendationServiceTest {
         when(analyzeJobRepository.findByJobIdAndUserUsername(jobId, username)).thenReturn(Optional.of(job));
         when(historyRepository.findByAnalyzeJob_Id(job.getId())).thenReturn(Optional.empty());
         when(historyRepository.findTopByUser_IdOrderByUserSeqDesc(user.getId())).thenReturn(Optional.empty());
-        when(openAiFashionClient.recommend(any(JsonNode.class), anyString(), any(), any()))
+        when(openAiFashionClient.recommend(any(JsonNode.class), anyString(), anyString(), any(), any()))
                 .thenReturn(objectMapper.readTree("{\"version\":\"mvp.v1\"}"));
 
         service.recommend(username, dto);
 
-        verify(openAiFashionClient).recommend(any(JsonNode.class), eq("premium"), eq("ko-KR"), eq("ko-KR, Asia/Seoul"));
+        verify(openAiFashionClient).recommend(
+                any(JsonNode.class),
+                eq("premium"),
+                eq("female"),
+                eq("ko-KR"),
+                eq("ko-KR, Asia/Seoul")
+        );
     }
 
     @Test
@@ -265,7 +276,7 @@ class FashionRecommendationServiceTest {
         assertEquals(jobId, response.jobId());
         assertEquals("premium", response.measurementModel());
         assertEquals("mvp.v1", response.recommendation().path("version").asText());
-        verify(openAiFashionClient, never()).recommend(any(JsonNode.class), anyString(), any(), any());
+        verify(openAiFashionClient, never()).recommend(any(JsonNode.class), anyString(), anyString(), any(), any());
         verify(historyRepository, never()).save(any(MeasurementRecommendationHistoryEntity.class));
     }
 

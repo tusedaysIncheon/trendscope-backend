@@ -50,6 +50,9 @@ class AnalyzeJobServiceContractTest {
     @Mock
     private ModalAnalyzeClient modalAnalyzeClient;
 
+    @Mock
+    private AnalyzeShareTokenService analyzeShareTokenService;
+
     private AnalyzeJobService service;
 
     @BeforeEach
@@ -60,6 +63,7 @@ class AnalyzeJobServiceContractTest {
                 ticketLedgerService,
                 s3Util,
                 modalAnalyzeClient,
+                analyzeShareTokenService,
                 new ObjectMapper()
         );
         ReflectionTestUtils.setField(service, "downloadUrlExpireMinutes", 30L);
