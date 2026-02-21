@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class OpenAiFashionClient {
 
-    private static final String PROMPT_VERSION = "mvp.v4";
+    private static final String PROMPT_VERSION = "mvp.v5";
     private static final int MAX_LANGUAGE_ENFORCE_ATTEMPTS = 2;
     private static final Pattern HANGUL_PATTERN = Pattern.compile("[가-힣]");
     private static final Pattern LATIN_PATTERN = Pattern.compile("[A-Za-z]");
@@ -42,12 +42,17 @@ public class OpenAiFashionClient {
     );
 
     private static final String PREMIUM_SYSTEM_PROMPT = """
-            너는 대한민국 상위 0.1% 남성 패션 스타일리스트다.
+            너는 대한민국 상위 0.1% 패션 스타일리스트다.
             패션 매거진 에디터 출신이며 수천명의 스타일링을 담당했다.
             사용자는 빠르게 바로 입을 수 있는 코디/구매 가이드를 원한다.
 
             규칙:
             - 입력은 신체정보 JSON이며 모든 수치는 cm 단위다.
+            - 입력 JSON의 gender(male/female/other)를 반드시 반영한다.
+            - gender=female이면 여성 핏/실루엣/아이템 중심으로 제안한다.
+            - gender=male이면 남성 핏/실루엣/아이템 중심으로 제안한다.
+            - gender=other이면 유니섹스/중립 스타일 중심으로 제안한다.
+            - 성별과 반대되는 전용 아이템/표현을 권장하지 않는다.
             - JSON 안의 값만 근거로 판단한다.
             - 평균 대비 단정 표현 금지. 대신 비율상 ~해 보일 수 있음 / 이렇게 연출하면 보정됨 형태로 서술한다.
             - 체형 비하/불안 유발 표현 금지.
@@ -162,12 +167,17 @@ public class OpenAiFashionClient {
             """;
 
     private static final String QUICK_SYSTEM_PROMPT = """
-            너는 대한민국 상위 0.1% 남성 패션 스타일리스트다.
+            너는 대한민국 상위 0.1% 패션 스타일리스트다.
             패션 매거진 에디터 출신이며 수천명의 스타일링을 담당했다.
             사용자는 빠르게 바로 입을 수 있는 코디/구매 가이드를 원한다.
 
             규칙:
             - 입력은 신체정보 JSON이며 모든 수치는 cm 단위다.
+            - 입력 JSON의 gender(male/female/other)를 반드시 반영한다.
+            - gender=female이면 여성 핏/실루엣/아이템 중심으로 제안한다.
+            - gender=male이면 남성 핏/실루엣/아이템 중심으로 제안한다.
+            - gender=other이면 유니섹스/중립 스타일 중심으로 제안한다.
+            - 성별과 반대되는 전용 아이템/표현을 권장하지 않는다.
             - JSON 안의 값만 근거로 판단한다.
             - 평균 대비 단정 표현 금지. 대신 비율상 ~해 보일 수 있음 / 이렇게 연출하면 보정됨 형태로 서술한다.
             - 체형 비하/불안 유발 표현 금지.
@@ -251,6 +261,7 @@ public class OpenAiFashionClient {
     public JsonNode recommend(
             JsonNode measurementInput,
             String measurementModel,
+            String gender,
             String preferredLanguage,
             String locationHint
     ) {
@@ -274,6 +285,7 @@ public class OpenAiFashionClient {
             recommendation = requestRecommendation(
                     inputJson,
                     measurementModel,
+                    gender,
                     targetLanguage,
                     safeLocation,
                     strictRetry
@@ -298,6 +310,7 @@ public class OpenAiFashionClient {
     private JsonNode requestRecommendation(
             String inputJson,
             String measurementModel,
+            String gender,
             String targetLanguage,
             String locationHint,
             boolean strictRetry
@@ -306,7 +319,7 @@ public class OpenAiFashionClient {
         body.put("model", openAiModel);
         body.put("temperature", 0.2);
         body.put("response_format", Map.of("type", "json_object"));
-        body.put("messages", buildMessages(inputJson, measurementModel, targetLanguage, locationHint, strictRetry));
+        body.put("messages", buildMessages(inputJson, measurementModel, gender, targetLanguage, locationHint, strictRetry));
 
         RestClient client = buildClient();
         try {
@@ -362,14 +375,18 @@ public class OpenAiFashionClient {
     private List<Map<String, String>> buildMessages(
             String inputJson,
             String measurementModel,
+            String gender,
             String targetLanguage,
             String locationHint,
             boolean strictRetry
     ) {
+        String normalizedGender = normalizeGender(gender);
         StringBuilder userContent = new StringBuilder("Input JSON:\n")
                 .append(inputJson)
                 .append("\n\nTarget language code: ")
-                .append(targetLanguage);
+                .append(targetLanguage)
+                .append("\nGender: ")
+                .append(normalizedGender);
         if (hasText(locationHint)) {
             userContent.append("\nLocation hint: ").append(locationHint);
         }
@@ -510,6 +527,17 @@ public class OpenAiFashionClient {
             return "";
         }
         return compact(value.replaceAll("[\\r\\n\\t]+", " "), 120);
+    }
+
+    private String normalizeGender(String rawGender) {
+        if (!hasText(rawGender)) {
+            return "other";
+        }
+        String normalized = rawGender.trim().toLowerCase(Locale.ROOT);
+        if ("male".equals(normalized) || "female".equals(normalized) || "other".equals(normalized)) {
+            return normalized;
+        }
+        return "other";
     }
 
     private boolean isResponseLanguageAcceptable(JsonNode recommendation, String languageCode) {

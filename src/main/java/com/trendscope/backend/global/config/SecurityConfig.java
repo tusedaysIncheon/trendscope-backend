@@ -171,6 +171,8 @@ public class SecurityConfig {
                                                 .hasRole(UserRoleType.USER.name())
                                                 .requestMatchers(HttpMethod.POST, "/v*/dev/analyze/one-shot")
                                                 .permitAll()
+                                                .requestMatchers(HttpMethod.GET, "/v*/share/**")
+                                                .permitAll()
                                                 .requestMatchers(HttpMethod.POST, "/v*/analyze/**")
                                                 .hasRole(UserRoleType.USER.name())
                                                 .requestMatchers(HttpMethod.GET, "/v*/analyze/**")

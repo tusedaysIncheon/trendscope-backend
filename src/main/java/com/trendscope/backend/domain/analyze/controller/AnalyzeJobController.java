@@ -41,6 +41,12 @@ public class AnalyzeJobController {
         return ApiResponse.ok(analyzeJobService.getJob(currentUsername(), jobId));
     }
 
+    @Operation(summary = "결과 공유 링크 발급", description = "완료된 측정 결과에 대한 공개 공유 링크를 발급합니다.")
+    @PostMapping("/{jobId}/share")
+    public ApiResponse<AnalyzeJobShareResponseDTO> createShareLink(@PathVariable String jobId) {
+        return ApiResponse.ok(analyzeJobService.issueShareLink(currentUsername(), jobId));
+    }
+
     @Operation(summary = "내 측정 목록", description = "최근 측정 작업 목록을 조회합니다.")
     @GetMapping("/me")
     public ApiResponse<AnalyzeJobListResponseDTO> myJobs(@RequestParam(defaultValue = "20") int size) {

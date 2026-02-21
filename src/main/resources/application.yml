@@ -113,6 +113,7 @@ app:
   analyze:
     upload-url-expire-minutes: ${ANALYZE_UPLOAD_URL_EXPIRE_MINUTES:10}
     download-url-expire-minutes: ${ANALYZE_DOWNLOAD_URL_EXPIRE_MINUTES:30}
+    share-token-expire-hours: ${ANALYZE_SHARE_TOKEN_EXPIRE_HOURS:72}
     one-shot:
       enabled: ${ANALYZE_ONE_SHOT_ENABLED:false}
       s3-prefix: ${ANALYZE_ONE_SHOT_S3_PREFIX:analyze-one-shot}

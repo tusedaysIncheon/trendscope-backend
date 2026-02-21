@@ -25,6 +25,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
@@ -40,6 +42,7 @@ public class AnalyzeJobService {
     private final TicketLedgerService ticketLedgerService;
     private final S3Util s3Util;
     private final ModalAnalyzeClient modalAnalyzeClient;
+    private final AnalyzeShareTokenService analyzeShareTokenService;
     private final ObjectMapper objectMapper;
 
     @Value("${app.analyze.upload-url-expire-minutes:10}")
@@ -47,6 +50,9 @@ public class AnalyzeJobService {
 
     @Value("${app.analyze.download-url-expire-minutes:30}")
     private long downloadUrlExpireMinutes;
+
+    @Value("${app.frontend-base-url:http://localhost:5173}")
+    private String frontendBaseUrl;
 
     @Transactional
     public AnalyzeUploadUrlsResponseDTO issueUploadUrls(String username, AnalyzeUploadUrlsRequestDTO dto) {
@@ -152,6 +158,57 @@ public class AnalyzeJobService {
         AnalyzeJobEntity job = analyzeJobRepository.findByJobIdAndUserUsername(jobId, username)
                 .orElseThrow(() -> new IllegalArgumentException("측정 job을 찾을 수 없습니다."));
         return toStatusResponse(job);
+    }
+
+    @Transactional(readOnly = true)
+    public AnalyzeJobShareResponseDTO issueShareLink(String username, String jobId) {
+        AnalyzeJobEntity job = analyzeJobRepository.findByJobIdAndUserUsername(jobId, username)
+                .orElseThrow(() -> new IllegalArgumentException("측정 job을 찾을 수 없습니다."));
+
+        if (job.getStatus() != AnalyzeJobStatus.COMPLETED || !hasText(job.getResultJson())) {
+            throw new IllegalArgumentException("완료된 측정 결과만 공유할 수 있습니다.");
+        }
+
+        AnalyzeShareTokenService.IssuedShareToken issuedToken = analyzeShareTokenService.issueToken(job.getJobId());
+        String shareUrl = buildShareUrl(issuedToken.token());
+        return new AnalyzeJobShareResponseDTO(issuedToken.token(), shareUrl, issuedToken.expiresAt());
+    }
+
+    @Transactional(readOnly = true)
+    public AnalyzeSharedJobResponseDTO getSharedJob(String token) {
+        String jobId = analyzeShareTokenService.extractJobId(token);
+        AnalyzeJobEntity job = analyzeJobRepository.findByJobId(jobId)
+                .orElseThrow(() -> new IllegalArgumentException("공유된 측정 결과를 찾을 수 없습니다."));
+
+        if (job.getStatus() != AnalyzeJobStatus.COMPLETED || !hasText(job.getResultJson())) {
+            throw new IllegalArgumentException("공유 가능한 측정 결과가 아닙니다.");
+        }
+
+        JsonNode result;
+        try {
+            result = objectMapper.readTree(job.getResultJson());
+        } catch (Exception e) {
+            throw new IllegalArgumentException("공유 결과 데이터가 손상되었습니다.");
+        }
+
+        Duration downloadExpiry = Duration.ofMinutes(Math.max(1, downloadUrlExpireMinutes));
+        String glbDownloadUrl = hasText(job.getGlbObjectKey())
+                ? s3Util.createPresignedGetUrl(job.getGlbObjectKey(), downloadExpiry)
+                : null;
+
+        return new AnalyzeSharedJobResponseDTO(
+                job.getJobId(),
+                job.getMode(),
+                job.getStatus(),
+                glbDownloadUrl,
+                job.getHeightCm(),
+                job.getWeightKg(),
+                job.getGender(),
+                job.getMeasurementModel(),
+                result,
+                job.getCompletedAt(),
+                job.getCreatedDate()
+        );
     }
 
     @Transactional(readOnly = true)
@@ -292,6 +349,15 @@ public class AnalyzeJobService {
                 job.getCreatedDate(),
                 job.getUpdatedDate()
         );
+    }
+
+    private String buildShareUrl(String token) {
+        String baseUrl = hasText(frontendBaseUrl) ? frontendBaseUrl.trim() : "http://localhost:5173";
+        if (baseUrl.endsWith("/")) {
+            baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
+        }
+        String encodedToken = URLEncoder.encode(token, StandardCharsets.UTF_8);
+        return baseUrl + "/share/result/" + encodedToken;
     }
 
     private String normalizeGender(String gender) {

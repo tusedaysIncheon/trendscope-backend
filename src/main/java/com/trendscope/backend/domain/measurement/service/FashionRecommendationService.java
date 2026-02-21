@@ -66,10 +66,11 @@ public class FashionRecommendationService {
         }
 
         String measurementModel = inferMeasurementModel(job);
-        JsonNode aiInput = buildAiInput(rawResult, measurementModel);
+        JsonNode aiInput = buildAiInput(rawResult, measurementModel, job.getGender());
         JsonNode recommendation = openAiFashionClient.recommend(
                 aiInput,
                 measurementModel,
+                job.getGender(),
                 dto.getLanguage(),
                 dto.getLocation()
         );
@@ -118,9 +119,10 @@ public class FashionRecommendationService {
         return toHistoryDetail(history);
     }
 
-    private JsonNode buildAiInput(JsonNode rawResult, String measurementModel) {
+    private JsonNode buildAiInput(JsonNode rawResult, String measurementModel, String gender) {
         ObjectNode input = objectMapper.createObjectNode();
         input.put("success", true);
+        input.put("gender", normalizeGender(gender));
 
         JsonNode lengths = rawResult.path("lengths");
         if (!lengths.isObject()) {
@@ -136,14 +138,24 @@ public class FashionRecommendationService {
             input.set("circumferences", circumferences);
 
             JsonNode bodyShape = rawResult.path("body_shape");
-            if (bodyShape.isMissingNode() || bodyShape.isNull() || !hasText(bodyShape.asText(""))) {
-                input.put("body_shape", "unknown");
-            } else {
-                input.put("body_shape", bodyShape.asText());
+            String bodyShapeText = bodyShape.asText("");
+            if (hasText(bodyShapeText) && !"unknown".equalsIgnoreCase(bodyShapeText.trim())) {
+                input.put("body_shape", bodyShapeText.trim());
             }
         }
 
         return input;
+    }
+
+    private String normalizeGender(String rawGender) {
+        if (!hasText(rawGender)) {
+            return "other";
+        }
+        String normalized = rawGender.trim().toLowerCase();
+        if ("male".equals(normalized) || "female".equals(normalized) || "other".equals(normalized)) {
+            return normalized;
+        }
+        return "other";
     }
 
     private String inferMeasurementModel(AnalyzeJobEntity job) {
