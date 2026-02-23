@@ -8,6 +8,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
+import com.resend.core.exception.ResendException;
+import com.resend.Resend;
+import com.resend.services.emails.model.CreateEmailOptions;
+import com.resend.services.emails.model.CreateEmailResponse;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -42,6 +46,9 @@ public class EmailOtpDeliveryService {
 
     @Value("${app.auth.email-otp.ses.secret-key:}")
     private String sesSecretKey;
+    
+    @Value("${app.auth.email-otp.resend.api-key:}")
+    private String resendApiKey;
 
     @Value("${app.auth.email-otp.ses.region:ap-northeast-2}")
     private String sesRegion;
@@ -67,6 +74,15 @@ public class EmailOtpDeliveryService {
                 return;
             } catch (Exception e) {
                 log.error("SES 이메일 전송 실패. log 모드로 fallback 합니다. email={}", maskEmail(email), e);
+            }
+        }
+
+        if ("resend".equalsIgnoreCase(deliveryMode)) {
+            try {
+                sendViaResend(email, code);
+                return;
+            } catch (Exception e) {
+                log.error("Resend 이메일 전송 실패. log 모드로 fallback 합니다. email={}", maskEmail(email), e);
             }
         }
 
@@ -115,6 +131,24 @@ public class EmailOtpDeliveryService {
 
         SendEmailResponse response = client.sendEmail(request);
         log.info("SES OTP email sent. email={} messageId={}", maskEmail(email), response.messageId());
+    }
+
+    private void sendViaResend(String email, String code) throws ResendException {
+        if (!hasText(resendApiKey)) {
+            throw new IllegalStateException("resend api key is empty");
+        }
+        Resend resend = new Resend(resendApiKey);
+
+        CreateEmailOptions params = CreateEmailOptions.builder()
+                .from(fromAddress)
+                .to(email)
+                .subject(buildSubject())
+                .text(buildTextBody(code))
+                .html(buildHtmlBody(code))
+                .build();
+
+        CreateEmailResponse response = resend.emails().send(params);
+        log.info("Resend OTP email sent. email={} messageId={}", maskEmail(email), response.getId());
     }
 
     private SesClient getOrCreateSesClient() {

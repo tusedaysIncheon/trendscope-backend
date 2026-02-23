@@ -123,7 +123,7 @@ app:
     retention-cron: ${ANALYZE_RETENTION_CRON:0 15 4 * * *}
   auth:
     email-otp:
-      # log | smtp | ses
+      # log | smtp | ses | resend
       delivery-mode: ${EMAIL_OTP_DELIVERY_MODE:log}
       from: ${EMAIL_OTP_FROM:no-reply@trendscope.local}
       ttl-seconds: ${EMAIL_OTP_TTL_SECONDS:300}
@@ -142,6 +142,8 @@ app:
         access-key: ${SES_ACCESS_KEY:}
         secret-key: ${SES_SECRET_KEY:}
         region: ${SES_REGION:ap-northeast-2}
+      resend:
+        api-key: ${RESEND_API_KEY:}
 
 creem:
   base-url: ${CREEM_BASE_URL:https://test-api.creem.io}
