@@ -244,9 +244,17 @@ public class AnalyzeJobService {
         deleteS3ObjectQuietly(job.getSideImageKey());
         deleteS3ObjectQuietly(job.getGlbObjectKey());
 
-        // 운영 DB에서 FK에 ON DELETE CASCADE가 없더라도 삭제가 실패하지 않도록
-        // recommendation history를 선삭제한다.
-        measurementRecommendationHistoryRepository.deleteByAnalyzeJob_Id(job.getId());
+        // 운영 DB 스키마 편차(예: 마이그레이션 미적용)가 있어도 가능한 범위에서 삭제를 진행한다.
+        try {
+            measurementRecommendationHistoryRepository.deleteByAnalyzeJobId(job.getId());
+        } catch (Exception e) {
+            log.warn(
+                    "측정 기록 삭제 중 recommendation history 선삭제 실패. analyzeJobId={} jobId={}",
+                    job.getId(),
+                    job.getJobId(),
+                    e
+            );
+        }
         analyzeJobRepository.delete(job);
     }
 

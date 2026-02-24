@@ -4,6 +4,9 @@ import com.trendscope.backend.domain.measurement.entity.MeasurementRecommendatio
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
@@ -19,5 +22,7 @@ public interface MeasurementRecommendationHistoryRepository extends JpaRepositor
 
     Page<MeasurementRecommendationHistoryEntity> findByUser_UsernameOrderByCreatedDateDesc(String username, Pageable pageable);
 
-    long deleteByAnalyzeJob_Id(Long analyzeJobId);
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from MeasurementRecommendationHistoryEntity h where h.analyzeJob.id = :analyzeJobId")
+    int deleteByAnalyzeJobId(@Param("analyzeJobId") Long analyzeJobId);
 }
