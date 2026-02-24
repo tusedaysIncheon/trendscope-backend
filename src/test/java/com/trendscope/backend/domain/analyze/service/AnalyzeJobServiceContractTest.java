@@ -6,6 +6,7 @@ import com.trendscope.backend.domain.analyze.entity.AnalyzeJobEntity;
 import com.trendscope.backend.domain.analyze.entity.enums.AnalyzeJobStatus;
 import com.trendscope.backend.domain.analyze.entity.enums.AnalyzeMode;
 import com.trendscope.backend.domain.analyze.repository.AnalyzeJobRepository;
+import com.trendscope.backend.domain.measurement.repository.MeasurementRecommendationHistoryRepository;
 import com.trendscope.backend.domain.user.entity.UserEntity;
 import com.trendscope.backend.domain.user.entity.enums.TicketLedgerReason;
 import com.trendscope.backend.domain.user.entity.enums.SocialProviderType;
@@ -53,6 +54,9 @@ class AnalyzeJobServiceContractTest {
     @Mock
     private AnalyzeShareTokenService analyzeShareTokenService;
 
+    @Mock
+    private MeasurementRecommendationHistoryRepository measurementRecommendationHistoryRepository;
+
     private AnalyzeJobService service;
 
     @BeforeEach
@@ -64,6 +68,7 @@ class AnalyzeJobServiceContractTest {
                 s3Util,
                 modalAnalyzeClient,
                 analyzeShareTokenService,
+                measurementRecommendationHistoryRepository,
                 new ObjectMapper()
         );
         ReflectionTestUtils.setField(service, "downloadUrlExpireMinutes", 30L);

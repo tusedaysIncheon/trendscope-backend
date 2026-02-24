@@ -18,4 +18,6 @@ public interface MeasurementRecommendationHistoryRepository extends JpaRepositor
     Optional<MeasurementRecommendationHistoryEntity> findTopByUser_IdOrderByUserSeqDesc(Long userId);
 
     Page<MeasurementRecommendationHistoryEntity> findByUser_UsernameOrderByCreatedDateDesc(String username, Pageable pageable);
+
+    long deleteByAnalyzeJob_Id(Long analyzeJobId);
 }

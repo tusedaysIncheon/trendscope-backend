@@ -7,6 +7,7 @@ import com.trendscope.backend.domain.analyze.entity.AnalyzeJobEntity;
 import com.trendscope.backend.domain.analyze.entity.enums.AnalyzeJobStatus;
 import com.trendscope.backend.domain.analyze.entity.enums.AnalyzeMode;
 import com.trendscope.backend.domain.user.dto.TicketTransactionResponseDTO;
+import com.trendscope.backend.domain.measurement.repository.MeasurementRecommendationHistoryRepository;
 import com.trendscope.backend.domain.analyze.repository.AnalyzeJobRepository;
 import com.trendscope.backend.domain.user.entity.UserEntity;
 import com.trendscope.backend.domain.user.entity.enums.TicketType;
@@ -43,6 +44,7 @@ public class AnalyzeJobService {
     private final S3Util s3Util;
     private final ModalAnalyzeClient modalAnalyzeClient;
     private final AnalyzeShareTokenService analyzeShareTokenService;
+    private final MeasurementRecommendationHistoryRepository measurementRecommendationHistoryRepository;
     private final ObjectMapper objectMapper;
 
     @Value("${app.analyze.upload-url-expire-minutes:10}")
@@ -242,6 +244,9 @@ public class AnalyzeJobService {
         deleteS3ObjectQuietly(job.getSideImageKey());
         deleteS3ObjectQuietly(job.getGlbObjectKey());
 
+        // 운영 DB에서 FK에 ON DELETE CASCADE가 없더라도 삭제가 실패하지 않도록
+        // recommendation history를 선삭제한다.
+        measurementRecommendationHistoryRepository.deleteByAnalyzeJob_Id(job.getId());
         analyzeJobRepository.delete(job);
     }
 
