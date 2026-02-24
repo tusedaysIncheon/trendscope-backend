@@ -177,6 +177,8 @@ public class SecurityConfig {
                                                 .hasRole(UserRoleType.USER.name())
                                                 .requestMatchers(HttpMethod.GET, "/v*/analyze/**")
                                                 .hasRole(UserRoleType.USER.name())
+                                                .requestMatchers(HttpMethod.DELETE, "/v*/analyze/**")
+                                                .hasRole(UserRoleType.USER.name())
                                                 .requestMatchers(HttpMethod.GET, "/v*/mypage/**")
                                                 .hasRole(UserRoleType.USER.name())
                                                 .requestMatchers(HttpMethod.POST, "/v*/measurement/**")

@@ -230,6 +230,22 @@ public class AnalyzeJobService {
     }
 
     @Transactional
+    public void deleteMyJob(String username, String jobId) {
+        AnalyzeJobEntity job = analyzeJobRepository.findByJobIdAndUserUsername(jobId, username)
+                .orElseThrow(() -> new IllegalArgumentException("삭제할 측정 job을 찾을 수 없습니다."));
+
+        if (job.getStatus() == AnalyzeJobStatus.QUEUED || job.getStatus() == AnalyzeJobStatus.RUNNING) {
+            throw new IllegalArgumentException("진행 중인 측정 기록은 삭제할 수 없습니다.");
+        }
+
+        deleteS3ObjectQuietly(job.getFrontImageKey());
+        deleteS3ObjectQuietly(job.getSideImageKey());
+        deleteS3ObjectQuietly(job.getGlbObjectKey());
+
+        analyzeJobRepository.delete(job);
+    }
+
+    @Transactional
     public long deleteCompletedJobsBefore(LocalDateTime cutoff) {
         return analyzeJobRepository.deleteByCompletedAtBefore(cutoff);
     }
@@ -358,6 +374,17 @@ public class AnalyzeJobService {
         }
         String encodedToken = URLEncoder.encode(token, StandardCharsets.UTF_8);
         return baseUrl + "/share/result/" + encodedToken;
+    }
+
+    private void deleteS3ObjectQuietly(String objectKey) {
+        if (!hasText(objectKey)) {
+            return;
+        }
+        try {
+            s3Util.deleteObject(objectKey);
+        } catch (Exception e) {
+            log.warn("측정 기록 삭제 중 S3 오브젝트 삭제 실패. key={}", objectKey, e);
+        }
     }
 
     private String normalizeGender(String gender) {

@@ -53,6 +53,13 @@ public class AnalyzeJobController {
         return ApiResponse.ok(analyzeJobService.getMyJobs(currentUsername(), size));
     }
 
+    @Operation(summary = "측정 기록 삭제", description = "내 측정 기록 1건을 삭제합니다. 완료/실패 상태만 삭제 가능합니다.")
+    @DeleteMapping("/{jobId}")
+    public ApiResponse<Boolean> deleteJob(@PathVariable String jobId) {
+        analyzeJobService.deleteMyJob(currentUsername(), jobId);
+        return ApiResponse.ok(true);
+    }
+
     private String currentUsername() {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         if (username == null || username.isBlank()) {
