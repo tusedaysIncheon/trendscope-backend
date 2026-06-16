@@ -50,7 +50,7 @@ spring:
             client-name: google
             client-id: ${GOOGLE_CLIENT_ID}
             client-secret: ${GOOGLE_CLIENT_SECRET}
-            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            redirect-uri: https://api.trend-scope.net/trendscope/login/oauth2/code/google
             authorization-grant-type: authorization_code
             scope:
               - profile
